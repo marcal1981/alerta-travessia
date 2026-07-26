@@ -1,0 +1,10 @@
+{
+  "name": "Alerta Travessia IA",
+  "short_name": "Travessia IA",
+  "description": "Monitoramento e previsão probabilística do risco da travessia São Sebastião ↔ Ilhabela.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0B1120",
+  "theme_color": "#0B1120",
+  "icons": []
+}
