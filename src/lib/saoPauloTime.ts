@@ -44,6 +44,17 @@ export function getSaoPauloHourString(date: Date = new Date()): string {
   return `${map.year}-${map.month}-${map.day}T${hour}`;
 }
 
+/** Hora atual (0-23) no fuso de São Paulo. */
+export function getSaoPauloCurrentHour(date: Date = new Date()): number {
+  const hour = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    hour12: false,
+  }).format(date);
+  // Intl pode devolver "24" à meia-noite em algumas implementações — normaliza pra 0.
+  return Number(hour) % 24;
+}
+
 /** Data de hoje formatada para exibição (ex. "Sáb, 01/08"), no fuso de São Paulo. */
 export function getSaoPauloDisplayDate(date: Date = new Date()): string {
   const weekday = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "short" })

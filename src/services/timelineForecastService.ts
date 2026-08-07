@@ -8,7 +8,7 @@
  * atual.
  */
 
-import { getSaoPauloDateString } from "@/lib/saoPauloTime";
+import { getSaoPauloCurrentHour, getSaoPauloDateString } from "@/lib/saoPauloTime";
 
 export interface TimelinePoint {
   hour: number; // 0-23
@@ -66,10 +66,17 @@ export async function fetchTodayWindTimeline(): Promise<TimelinePoint[]> {
  * Usa rajada (não vento sustentado) porque o backtest contra fechamentos reais mostrou
  * que o vento sustentado costuma ficar bem abaixo dos limiares nos fechamentos de
  * verdade — é a rajada que se comporta de forma consistente com o que realmente fecha
- * a travessia. */
+ * a travessia.
+ *
+ * BUG REAL CORRIGIDO: a função escaneava o dia inteiro (00h-23h) e escolhia a janela de
+ * maior pico, mesmo que ela já tivesse terminado — o alerta "Risco crítico de
+ * fechamento" continuava na tela horas depois do horário previsto (ex. janela 9h-11h
+ * ainda exibida às 20h46). Janelas com endHour <= hora atual são ignoradas na escolha:
+ * o alerta expira sozinho assim que o horário previsto vence. */
 export function findCriticalWindow(
   points: TimelinePoint[],
-  thresholdKmh: number = CRITICAL_WIND_THRESHOLD_KMH
+  thresholdKmh: number = CRITICAL_WIND_THRESHOLD_KMH,
+  currentHour: number = getSaoPauloCurrentHour()
 ): CriticalWindow | null {
   let bestWindow: CriticalWindow | null = null;
   let currentStart: number | null = null;
@@ -78,9 +85,11 @@ export function findCriticalWindow(
   const closeWindow = (endHour: number) => {
     if (currentStart == null) return;
     const window: CriticalWindow = { startHour: currentStart, endHour, maxWindKmh: currentMax };
-    if (!bestWindow || window.maxWindKmh > bestWindow.maxWindKmh) bestWindow = window;
     currentStart = null;
     currentMax = 0;
+
+    if (window.endHour <= currentHour) return; // janela já encerrada — alerta vencido
+    if (!bestWindow || window.maxWindKmh > bestWindow.maxWindKmh) bestWindow = window;
   };
 
   for (const p of points) {
