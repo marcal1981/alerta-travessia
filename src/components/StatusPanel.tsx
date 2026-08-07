@@ -48,10 +48,23 @@ export function StatusPanel({
               <p className="text-xs text-mist-500">Ilhabela</p>
             </div>
           </div>
+          {queueStatus?.ferriesInOperation != null && (
+            <p className="mt-3 text-xs text-mist-500">
+              <span className="font-mono font-semibold text-mist-100">{queueStatus.ferriesInOperation}</span>{" "}
+              balsa{queueStatus.ferriesInOperation === 1 ? "" : "s"} em operação agora — menos balsas rodando
+              costuma significar fila maior, mesmo sem mau tempo.
+            </p>
+          )}
+          {queueStatus?.ferriesInOperation == null && queueStatus?.capacityPercent != null && (
+            <p className="mt-3 text-xs text-mist-500">
+              Operando com <span className="font-mono font-semibold text-mist-100">{queueStatus.capacityPercent}%</span>{" "}
+              da capacidade — capacidade reduzida costuma significar fila maior, mesmo sem mau tempo.
+            </p>
+          )}
         </div>
       </div>
       <p className="mt-6 text-xs text-mist-500">
-        Fonte: {status?.updatedBy === "api-oficial" ? status.source ?? "API oficial" : "Atualização manual do administrador"}
+        Fonte: Atualização do Departamento Hidroviário
         {status?.updatedAt && (
           <> · {new Date(status.updatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</>
         )}

@@ -97,6 +97,7 @@ export interface OfficialQueueStatus {
   waitTimeSaoSebastiaoMin: number | null;
   waitTimeIlhabelaMin: number | null;
   ferriesInOperation: number | null;
+  capacityPercent: number | null; // métrica alternativa observada em notícias oficiais ("opera com X% da capacidade")
   systemUnstableWarning: boolean; // true quando o próprio DH avisa que os dados podem estar desatualizados
   fetchedAt: string;
   source: "semil-scrape" | "unavailable";
@@ -117,11 +118,21 @@ export interface OfficialCamera {
  * que continua 100% baseado em medição local do canal.
  */
 export interface IncomingSystem {
-  type: "chuva_forte" | "vento_forte";
+  type: "chuva_forte" | "vento_forte" | "aquecimento_pre_frontal";
   sourceLabel: string; // ex: "Santos"
   distanceKm: number;
   etaHours: number;
   confidence: "alta" | "baixa";
+}
+
+/**
+ * Um "retrato" da previsão horária do dia, guardado no momento em que foi buscada —
+ * a base pra validar acurácia de antecedência de verdade (comparando com o que
+ * realmente aconteceu, depois). Ver `forecastSnapshotService.ts`.
+ */
+export interface ForecastSnapshot {
+  fetchedAt: string; // ISO — quando este retrato foi tirado
+  hourlyGustKmh: { hour: string; gustKmh: number }[]; // hour em ISO (America/Sao_Paulo)
 }
 
 

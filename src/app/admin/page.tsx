@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_WEIGHTS } from "@/services/riskEngine";
 import { WEATHER_SOURCES } from "@/services/weatherService";
-import { listRegionalAlertLog, RegionalAlertLogEntry } from "@/firebase/firestore";
-import { AlgorithmWeights, OperationalStatus } from "@/types";
+import { listRegionalAlertLog, listForecastSnapshots, RegionalAlertLogEntry } from "@/firebase/firestore";
+import { AlgorithmWeights, ForecastSnapshot, OperationalStatus } from "@/types";
 
 /**
  * Painel Admin — Fase 1.
@@ -19,9 +19,16 @@ export default function AdminPage() {
   const [status, setStatus] = useState<OperationalStatus>("operando");
   const [reason, setReason] = useState("");
   const [regionalLog, setRegionalLog] = useState<RegionalAlertLogEntry[]>([]);
+  const [snapshots, setSnapshots] = useState<ForecastSnapshot[]>([]);
+  const [visitCount, setVisitCount] = useState<number | null>(null);
 
   useEffect(() => {
     listRegionalAlertLog().then(setRegionalLog);
+    listForecastSnapshots().then(setSnapshots);
+    fetch("/api/visit-count")
+      .then((r) => r.json())
+      .then((d) => setVisitCount(d.count))
+      .catch(() => setVisitCount(null));
   }, []);
 
   const weightFields: { key: keyof AlgorithmWeights; label: string }[] = [
@@ -111,6 +118,36 @@ export default function AdminPage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="glass-panel mt-6 p-6">
+        <p className="eyebrow">Retratos de Previsão (base para validar acurácia de antecedência)</p>
+        <p className="mt-1 text-xs text-mist-500">
+          Cada retrato guarda o que o modelo previu pro dia inteiro, no momento em que
+          foi capturado (no máximo 1x por hora). Depois de algumas semanas acumuladas,
+          dá pra comparar cada retrato com o que realmente aconteceu, medindo a
+          precisão da previsão em diferentes horas de antecedência. Ainda sem
+          Firebase configurado, isso se perde a cada recarregamento — só acumula de
+          verdade depois que o Firebase estiver ativo.
+        </p>
+        <p className="mt-3 text-sm text-mist-300">
+          {snapshots.length === 0
+            ? "Nenhum retrato capturado ainda nesta sessão."
+            : `${snapshots.length} retrato(s) capturado(s) nesta sessão. Mais recente: ${new Date(
+                snapshots[0].fetchedAt
+              ).toLocaleString("pt-BR")}`}
+        </p>
+      </section>
+
+      <section className="glass-panel mt-6 p-6">
+        <p className="eyebrow">Contador de Acesso</p>
+        <p className="mt-2 font-mono text-3xl font-bold text-mist-100">
+          {visitCount != null ? visitCount.toLocaleString("pt-BR") : "—"}
+        </p>
+        <p className="mt-1 text-xs text-mist-500">
+          Carregamentos de página registrados desde que este contador foi criado. Não
+          distingue visitante único de recorrente — é uma contagem simples.
+        </p>
       </section>
 
       <section className="glass-panel mt-6 p-6">

@@ -1,12 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Sora, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import { Navbar } from "@/components/Navbar";
-
-const display = Sora({ subsets: ["latin"], variable: "--font-display", weight: ["500", "600", "700"] });
-const body = Inter({ subsets: ["latin"], variable: "--font-body" });
-const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", weight: ["400", "500"] });
+import { Footer } from "@/components/Footer";
+import { VisitTracker } from "@/components/VisitTracker";
 
 export const metadata: Metadata = {
   title: "Alerta Travessia IA — São Sebastião ↔ Ilhabela",
@@ -24,10 +21,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${display.variable} ${body.variable} ${mono.variable} dark`}>
+    <html lang="pt-BR" className="dark">
       <body className="font-body min-h-screen">
         <Navbar />
+        <VisitTracker />
         <main>{children}</main>
+        <Footer />
       </body>
     </html>
   );

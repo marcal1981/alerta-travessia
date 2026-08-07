@@ -1,4 +1,6 @@
 import { IncomingSystem } from "@/types";
+import { getSaoPauloHourString } from "@/lib/saoPauloTime";
+import { logError } from "@/lib/logger";
 
 /**
  * Monitor Regional — observa 3 pontos de referência distantes e estima se uma
@@ -49,6 +51,10 @@ const STRONG_WIND_THRESHOLD_KMH = 46;
 const HEAVY_RAIN_THRESHOLD_MM = 4;
 const HIGH_WAVE_THRESHOLD_M = 2.5; // "mar agitado" / ressaca, consistente com avisos da Marinha
 const DIRECTION_TOLERANCE_DEG = 50; // quão alinhado o vento precisa estar com a rota até a travessia
+
+// Limiar de aquecimento pré-frontal — ver checkPreFrontalWarming() abaixo.
+const PRE_FRONTAL_WARMING_THRESHOLD_C = 2;
+const PRE_FRONTAL_WARMING_WINDOW_HOURS = 12;
 
 interface OpenMeteoSimpleCurrent {
   current: {
@@ -121,14 +127,74 @@ async function fetchWaveHeight(point: ReferencePoint): Promise<number | null> {
   if (!res.ok) return null;
   const data: OpenMeteoMarineCurrent = await res.json();
 
-  const nowIso = new Date().toISOString().slice(0, 13);
+  // Bug real corrigido: usava toISOString() (UTC) — ver src/lib/saoPauloTime.ts.
+  const nowIso = getSaoPauloHourString();
   let idx = data.hourly.time.findIndex((t) => t.startsWith(nowIso));
   if (idx === -1) idx = 0;
   return data.hourly.wave_height[idx] ?? null;
 }
 
+interface OpenMeteoTemperatureTrend {
+  hourly: {
+    time: string[];
+    temperature_2m: number[];
+  };
+}
+
+/**
+ * Detecta aquecimento pré-frontal — sinal repassado por um velejador experiente
+ * (Danilo Casa): antes da chegada de uma frente fria (que quase sempre é a causa dos
+ * fechamentos por vento nesta travessia), a temperatura sobe rapidamente nas ~12h
+ * anteriores, ANTES do vento intensificar. É um sinal de antecedência maior que os
+ * outros 3 pontos de referência, mas medido localmente (não requer alinhamento de
+ * direção — a subida de temperatura já acontece no próprio canal).
+ *
+ * ATENÇÃO: implementado a partir de conhecimento prático relatado, ainda não validado
+ * numericamente contra os fechamentos reais já mapeados (ver `analise-historica.mjs`
+ * — teste de temperatura). Tratar como hipótese razoável, não como fato confirmado,
+ * até essa validação retornar.
+ */
+async function checkPreFrontalWarming(): Promise<IncomingSystem | null> {
+  try {
+    const url = new URL("https://api.open-meteo.com/v1/forecast");
+    url.searchParams.set("latitude", String(CROSSING_LATITUDE));
+    url.searchParams.set("longitude", String(CROSSING_LONGITUDE));
+    url.searchParams.set("hourly", "temperature_2m");
+    url.searchParams.set("past_hours", String(PRE_FRONTAL_WARMING_WINDOW_HOURS));
+    url.searchParams.set("forecast_days", "1");
+    url.searchParams.set("timezone", "America/Sao_Paulo");
+
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`Open-Meteo (temperatura) respondeu ${res.status}`);
+    const data: OpenMeteoTemperatureTrend = await res.json();
+
+    const temps = data.hourly.temperature_2m;
+    if (!temps || temps.length < PRE_FRONTAL_WARMING_WINDOW_HOURS + 1) return null;
+
+    // As primeiras N horas do array são o passado (past_hours); a última delas é "agora".
+    const nowIdx = PRE_FRONTAL_WARMING_WINDOW_HOURS;
+    const delta = temps[nowIdx] - temps[0];
+
+    if (delta < PRE_FRONTAL_WARMING_THRESHOLD_C) return null;
+
+    return {
+      type: "aquecimento_pre_frontal",
+      sourceLabel: "Aquecimento pré-frontal (local)",
+      distanceKm: 0,
+      etaHours: 6, // estimativa intermediária — Danilo Casa relata até 12h de antecedência
+      confidence: "alta",
+    };
+  } catch (err) {
+    logError("regionalWatchService.preFrontal", err);
+    return null;
+  }
+}
+
 export async function checkIncomingSystems(): Promise<IncomingSystem | null> {
   const matches: IncomingSystem[] = [];
+
+  const warming = await checkPreFrontalWarming();
+  if (warming) matches.push(warming);
 
   for (const point of REFERENCE_POINTS) {
     try {
@@ -164,7 +230,7 @@ export async function checkIncomingSystems(): Promise<IncomingSystem | null> {
         confidence: point.confidence,
       });
     } catch (err) {
-      console.error(`Falha ao monitorar ${point.label}:`, err);
+      logError(`regionalWatchService.${point.label}`, err);
       continue;
     }
   }

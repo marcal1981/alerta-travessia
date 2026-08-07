@@ -1,6 +1,7 @@
 import { WeatherReading, WeatherSourceConfig, WeatherSourceId } from "@/types";
 import { OpenMeteoProvider } from "./providers/openMeteoProvider";
 import { getTideAt } from "./tideService";
+import { logError } from "@/lib/logger";
 
 /**
  * Contrato que qualquer provedor meteorológico real deve implementar.
@@ -79,7 +80,7 @@ export async function getCurrentWeather(): Promise<WeatherReading> {
   } catch (err) {
     // Se a API real falhar (rede indisponível, mudança de contrato, etc.), cai para o
     // simulado em vez de quebrar o dashboard — mas o `source` no retorno deixa isso visível.
-    console.error("Open-Meteo indisponível, usando dado simulado:", err);
+    logError("weatherService", err);
     const reading = await fallbackProvider.fetchCurrent();
     return applyTide(reading);
   }

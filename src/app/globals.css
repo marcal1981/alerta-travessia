@@ -3,9 +3,12 @@
 @tailwind utilities;
 
 :root {
-  --font-display: "Sora", var(--font-body), sans-serif;
-  --font-body: "Inter", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+  /* Fontes nativas do sistema — carregam instantaneamente, sem depender de rede
+     durante o build (causa raiz suspeita de builds falhando silenciosamente em
+     alguns ambientes de hospedagem, incluindo possivelmente a Hostinger). */
+  --font-display: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-body: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
 }
 
 html {

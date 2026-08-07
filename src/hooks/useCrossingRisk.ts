@@ -6,8 +6,10 @@ import { runMpt } from "@/services/riskEngine";
 import { getOfficialStatus } from "@/services/officialStatusService";
 import { checkIncomingSystems } from "@/services/regionalWatchService";
 import { getOfficialQueueStatus } from "@/services/officialQueueService";
+import { maybeCaptureForecastSnapshot } from "@/services/forecastSnapshotService";
 import { logRegionalAlert } from "@/firebase/firestore";
 import { MptResult, OfficialQueueStatus, OfficialStatus, WeatherReading } from "@/types";
+import { logError } from "@/lib/logger";
 
 interface CrossingRiskState {
   weather: WeatherReading | null;
@@ -19,7 +21,7 @@ interface CrossingRiskState {
   refresh: () => void;
 }
 
-const POLL_INTERVAL_MS = 60_000; // atualização automática a cada minuto
+const POLL_INTERVAL_MS = 20 * 60_000; // atualização automática a cada 20 minutos
 
 export function useCrossingRisk(): CrossingRiskState {
   const [weather, setWeather] = useState<WeatherReading | null>(null);
@@ -44,10 +46,11 @@ export function useCrossingRisk(): CrossingRiskState {
       setMpt(result);
       if (incomingSystem) {
         logRegionalAlert(incomingSystem, result.riskIndex).catch((err) =>
-          console.error("Falha ao registrar alerta regional:", err)
+          logError("regionalAlert", err)
         );
       }
       setError(null);
+      maybeCaptureForecastSnapshot().catch((err) => logError("forecastSnapshot", err));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao atualizar dados.");
     } finally {
