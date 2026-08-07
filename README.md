@@ -38,7 +38,7 @@ de espera zerado" (ver seção própria abaixo) — e mesmo essa só altera o qu
 | Autenticação / Usuários | Não implementado | Precisaria de Firebase Auth |
 | Notificações (Push/WhatsApp/Telegram) | Não implementado | — |
 | Radar/ondas/nuvens no mapa | Removido (era placeholder) | Mapa tirado do Dashboard por falta de função real |
-| Contador de acesso | **Real**, específico da Hostinger | Arquivo (`data/visit-count.json`) — só funciona porque a Hostinger roda Node.js persistente |
+| Contador de acesso | **Real quando o Firebase está configurado** | Firestore (`meta/visit_count`, incremento atômico); sem Firebase configurado cai para memória e zera a cada deploy/reinício — Admin exibe aviso quando isso acontece |
 
 ---
 
@@ -198,12 +198,16 @@ x realizado. Só funciona de verdade com Firebase configurado.
 ## Hospedagem: Hostinger (Node.js), não Vercel
 
 O projeto roda num plano Node.js da Hostinger com processo persistente — isso é
-diferente de plataformas serverless (Vercel) e importa para duas features:
+diferente de plataformas serverless (Vercel) e importa para uma feature:
 
-- **Contador de acesso** (`api/visit-count/route.ts`): armazenado em arquivo
-  (`data/visit-count.json`). Isso **não funcionaria** num ambiente serverless, onde
-  o sistema de arquivos não sobrevive entre chamadas — lá seria necessário um banco
-  de dados real.
+- **Contador de acesso** (`api/visit-count/route.ts`): grava no Firestore
+  (`firebase/firestore.ts`), não em arquivo — um arquivo dentro da pasta do projeto
+  não sobreviveria a um deploy que apaga a pasta inteira antes de extrair o zip novo
+  (foi exatamente isso que zerou o contador no passado). Sem `NEXT_PUBLIC_FIREBASE_*`
+  configurado no painel Node.js da Hostinger, o contador cai para memória do processo
+  — sobrevive a requisições normais, mas zera a cada deploy/reinício, já que o
+  processo Node é substituído. O Admin (`/admin`) mostra um aviso quando está nesse
+  estado não-persistente.
 - **Cache-Control:** as páginas usam `no-store, must-revalidate` (exceto
   `/_next/static/*`, que tem nome de arquivo único por versão e pode cachear com
   segurança). Isso corrigiu um caso real onde celular e PC mostravam versões

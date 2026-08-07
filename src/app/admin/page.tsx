@@ -21,13 +21,17 @@ export default function AdminPage() {
   const [regionalLog, setRegionalLog] = useState<RegionalAlertLogEntry[]>([]);
   const [snapshots, setSnapshots] = useState<ForecastSnapshot[]>([]);
   const [visitCount, setVisitCount] = useState<number | null>(null);
+  const [visitCountPersisted, setVisitCountPersisted] = useState<boolean>(false);
 
   useEffect(() => {
     listRegionalAlertLog().then(setRegionalLog);
     listForecastSnapshots().then(setSnapshots);
     fetch("/api/visit-count")
       .then((r) => r.json())
-      .then((d) => setVisitCount(d.count))
+      .then((d) => {
+        setVisitCount(d.count);
+        setVisitCountPersisted(Boolean(d.persisted));
+      })
       .catch(() => setVisitCount(null));
   }, []);
 
@@ -148,6 +152,13 @@ export default function AdminPage() {
           Carregamentos de página registrados desde que este contador foi criado. Não
           distingue visitante único de recorrente — é uma contagem simples.
         </p>
+        {visitCount != null && !visitCountPersisted && (
+          <p className="mt-3 rounded-md border border-signal-critical/40 bg-signal-critical/10 px-3 py-2 text-xs text-signal-critical">
+            Firebase não configurado nesta instância — contagem em memória, some no
+            próximo deploy ou reinício. Preencha NEXT_PUBLIC_FIREBASE_* no ambiente da
+            Hostinger para persistir de verdade (ver README).
+          </p>
+        )}
       </section>
 
       <section className="glass-panel mt-6 p-6">
