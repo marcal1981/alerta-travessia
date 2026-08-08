@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { OfficialQueueStatus } from "@/types";
+import { logError } from "@/lib/logger";
 
 /**
  * Rota de servidor que busca a página oficial do Departamento Hidroviário (Semil) e
@@ -46,12 +47,38 @@ export async function GET() {
     const waitTimeSaoSebastiaoMin = waitMatches[0] ? Number(waitMatches[0][1]) : null;
     const waitTimeIlhabelaMin = waitMatches[1] ? Number(waitMatches[1][1]) : null;
 
-    // Padrão observado no resumo do topo: "SÃO SEBASTIÃO 30 min ... ILHABELA 30 min ... 3"
-    // (o último número é a quantidade de balsas em operação nesta travessia)
+    // Padrão observado no resumo do topo (formato antigo/alternativo):
+    // "SÃO SEBASTIÃO 30 min ... ILHABELA 30 min ... 3"
     const summaryMatch = text.match(
       /SÃO SEBASTIÃO\s+(\d+)\s*min[\s\S]{0,80}?ILHABELA\s+(\d+)\s*min[\s\S]{0,20}?(\d+)/i
     );
-    const ferriesInOperation = summaryMatch ? Number(summaryMatch[3]) : null;
+
+    // Padrão real observado na página específica da travessia: número por EXTENSO, não
+    // dígito — ex: "A frota conta com quatro embarcações em operação". A versão anterior
+    // deste código só procurava dígito (\d+), por isso nunca capturava nada aqui.
+    const NUMBER_WORDS: Record<string, number> = {
+      uma: 1, um: 1, duas: 2, dois: 2, três: 3, tres: 3, quatro: 4, cinco: 5,
+      seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+    };
+    const fleetMatch = text.match(
+      /(\d+|um|uma|dois|duas|tr[êe]s|quatro|cinco|seis|sete|oito|nove|dez)\s+embarca[çc][õo]es?\s+em\s+opera[çc][ãa]o/i
+    );
+    const fleetWord = fleetMatch?.[1]?.toLowerCase();
+    const ferriesInOperation = fleetWord
+      ? /^\d+$/.test(fleetWord)
+        ? Number(fleetWord)
+        : NUMBER_WORDS[fleetWord] ?? null
+      : summaryMatch
+      ? Number(summaryMatch[3])
+      : null;
+
+    // Padrão alternativo observado em notícias oficiais da Semil: em vez de contar
+    // embarcações, às vezes reportam % da capacidade operacional — ex: "opera com 49%
+    // da sua capacidade operacional". Métrica diferente (percentual, não contagem),
+    // por isso fica num campo separado — não dá pra converter um no outro sem saber
+    // a frota total do dia.
+    const capacityMatch = text.match(/opera\s+com\s+(\d+)%\s+da\s+(?:sua\s+)?capacidade\s+operacional/i);
+    const capacityPercent = capacityMatch ? Number(capacityMatch[1]) : null;
 
     const systemUnstableWarning = /instabilidade/i.test(text);
 
@@ -59,6 +86,7 @@ export async function GET() {
       waitTimeSaoSebastiaoMin,
       waitTimeIlhabelaMin,
       ferriesInOperation,
+      capacityPercent,
       systemUnstableWarning,
       fetchedAt: new Date().toISOString(),
       source: "semil-scrape",
@@ -66,7 +94,7 @@ export async function GET() {
 
     return NextResponse.json(status);
   } catch (err) {
-    console.error("Falha ao ler a página oficial do DH:", err);
+    logError("dhStatus", err);
     return NextResponse.json(unavailableStatus(), { status: 200 });
   }
 }
@@ -76,6 +104,7 @@ function unavailableStatus(): OfficialQueueStatus {
     waitTimeSaoSebastiaoMin: null,
     waitTimeIlhabelaMin: null,
     ferriesInOperation: null,
+    capacityPercent: null,
     systemUnstableWarning: false,
     fetchedAt: new Date().toISOString(),
     source: "unavailable",

@@ -1,5 +1,6 @@
 import { WeatherReading } from "@/types";
 import { WeatherProvider } from "../weatherService";
+import { getSaoPauloHourString } from "@/lib/saoPauloTime";
 
 /**
  * Coordenadas do canal entre os terminais de São Sebastião e Ilhabela — ponto médio
@@ -96,8 +97,12 @@ export class OpenMeteoProvider implements WeatherProvider {
     const marine: OpenMeteoMarineResponse = await marineRes.json();
 
     // A marine API só retorna série horária (sem endpoint "current"); pegamos a
-    // leitura da hora mais próxima de agora.
-    const nowIso = new Date().toISOString().slice(0, 13); // "YYYY-MM-DDTHH"
+    // leitura da hora mais próxima de agora. BUG REAL CORRIGIDO: usava
+    // `toISOString()` (UTC) pra comparar contra uma série que a API já devolve no
+    // fuso de SP — a partir das 21h locais isso nunca batia, caindo sempre no
+    // fallback (índice 0 = meia-noite), então a onda "atual" na prática nunca era a
+    // atual. Ver src/lib/saoPauloTime.ts.
+    const nowIso = getSaoPauloHourString();
     let marineIdx = marine.hourly.time.findIndex((t) => t.startsWith(nowIso));
     if (marineIdx === -1) marineIdx = 0;
 

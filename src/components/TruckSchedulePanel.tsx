@@ -75,15 +75,21 @@ export function TruckSchedulePanel() {
                   ))}
                 </ul>
               )}
+              {/* Aviso de PBT máximo movido pra dentro do card da categoria que ele
+                  realmente afeta (4+ eixos é a única que costuma aproximar desse
+                  limite) — antes vivia numa box própria genérica ("Limite sempre
+                  válido"), aplicada visualmente a todas as categorias por igual. */}
+              {category === "quatro_mais_eixos" && (
+                <p className="mt-2 text-xs text-mist-500">Proibido acima de 40t (PBT).</p>
+              )}
             </div>
           );
         })}
       </div>
 
       <p className="mt-4 rounded-lg border border-white/[0.06] bg-navy-900/60 p-3 text-xs leading-relaxed text-mist-500">
-        Baseado na Resolução Semil nº 79/2023 e na maré medida agora. Ainda não considera
-        vésperas de feriado prolongado (janelas estendidas) — confirme sempre no canal
-        oficial do Departamento Hidroviário (0800 77 33 711) antes de despachar cargas.
+        Baseado na Resolução Semil nº 79/2023 e na maré medida agora. Antes de despachar
+        cargas, confirme no canal oficial (0800 77 33 711).
       </p>
     </div>
   );

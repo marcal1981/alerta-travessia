@@ -1,0 +1,2 @@
+data_hora_parada,motivo_parada,duracao_minutos,temperatura_celsius,pressao_hpa,umidade_pct,vento_medio_kmh,rajadas_kmh,direcao_vento,altura_ondas_m,periodo_ondas_s,mare_m,visibilidade_km,irt_previsto_no_momento,status_algoritmo,observacoes
+2026-08-08T14:30:00,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-,EXEMPLO: Preencher linha por linha conforme a balsa para

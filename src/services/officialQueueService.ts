@@ -1,4 +1,5 @@
 import { OfficialCamera, OfficialQueueStatus } from "@/types";
+import { logError } from "@/lib/logger";
 
 /**
  * Câmeras oficiais do Departamento Hidroviário, hospedadas na infraestrutura própria
@@ -16,7 +17,7 @@ export const OFFICIAL_CAMERAS: OfficialCamera[] = [
   { id: "saosebastiao2", label: "São Sebastião · 100m da balsa", terminal: "sao_sebastiao", imageUrl: "https://dhapp3.azurewebsites.net/cameras/imagens/saosebastiao2.jpg", distanceM: 100 },
   { id: "saosebastiao3", label: "São Sebastião · 150m da balsa", terminal: "sao_sebastiao", imageUrl: "https://dhapp3.azurewebsites.net/cameras/imagens/saosebastiao3.jpg", distanceM: 150 },
   { id: "saosebastiao4", label: "São Sebastião · 200m da balsa", terminal: "sao_sebastiao", imageUrl: "https://dhapp3.azurewebsites.net/cameras/imagens/saosebastiao4.jpg", distanceM: 200 },
-  { id: "saosebastiao5", label: "São Sebastião · 300m da balsa", terminal: "sao_sebastiao", imageUrl: "https://dhapp3.azurewebsites.net/cameras/imagens/saosebastiao5.jpg", distanceM: 300 },
+  { id: "saosebastiao5", label: "São Sebastião · 30m da balsa", terminal: "sao_sebastiao", imageUrl: "https://dhapp3.azurewebsites.net/cameras/imagens/saosebastiao5.jpg", distanceM: 30 },
   { id: "ilhabela", label: "Ilhabela · 100m da balsa", terminal: "ilhabela", imageUrl: "https://dhapp3.azurewebsites.net/cameras/imagens/ilhabela.jpg", distanceM: 100 },
   { id: "ilhabela2", label: "Ilhabela · 150m da balsa", terminal: "ilhabela", imageUrl: "https://dhapp3.azurewebsites.net/cameras/imagens/ilhabela2.jpg", distanceM: 150 },
   { id: "ilhabela3", label: "Ilhabela · 200m da balsa", terminal: "ilhabela", imageUrl: "https://dhapp3.azurewebsites.net/cameras/imagens/ilhabela3.jpg", distanceM: 200 },
@@ -29,11 +30,12 @@ export async function getOfficialQueueStatus(): Promise<OfficialQueueStatus> {
     if (!res.ok) throw new Error(`API respondeu ${res.status}`);
     return await res.json();
   } catch (err) {
-    console.error("Falha ao consultar /api/dh-status:", err);
+    logError("officialQueueService", err);
     return {
       waitTimeSaoSebastiaoMin: null,
       waitTimeIlhabelaMin: null,
       ferriesInOperation: null,
+      capacityPercent: null,
       systemUnstableWarning: false,
       fetchedAt: new Date().toISOString(),
       source: "unavailable",

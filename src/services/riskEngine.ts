@@ -24,16 +24,21 @@ import {
  */
 
 export const DEFAULT_WEIGHTS: AlgorithmWeights = {
-  windSpeed: 0.12,
-  windGust: 0.2,
-  waveHeight: 0.2,
-  wavePeriod: 0.08,
-  visibility: 0.08,
-  precipitation: 0.07,
+  // Pesos recalibrados a partir do backtest contra os 7 fechamentos reais mapeados
+  // (ver historico-paralisacoes-balsa.md): rajada e nevoeiro são as causas dominantes
+  // de verdade — vento sustentado, onda e período raramente se destacavam nos casos
+  // reais. Antes, todos os fatores tinham peso parecido, "diluindo" o sinal de rajada
+  // e fazendo o medidor de risco não bater com o gráfico de rajadas (que já usa os
+  // limiares validados diretamente). Isso foi reportado por um usuário real: no dia
+  // de um pico real de rajada, o medidor central mostrava "risco baixo" enquanto o
+  // gráfico já mostrava "Risco de Interrupção" para o mesmo momento.
+  windSpeed: 0.02,
+  windGust: 0.6,
+  waveHeight: 0.05,
+  wavePeriod: 0.02,
+  visibility: 0.03,
+  precipitation: 0.03,
   officialAlertBoost: 0.05,
-  // Peso alto e deliberado: o Departamento Hidroviário reportou que ~90% das paralisações
-  // recentes na travessia São Sebastião-Ilhabela foram causadas por neblina/nevoeiro —
-  // então tratamos isso como sinal categórico forte, não só como parte da visibilidade contínua.
   fogBoost: 0.2,
 };
 
@@ -41,40 +46,65 @@ function normalize(value: number, min: number, max: number): number {
   return Math.min(1, Math.max(0, (value - min) / (max - min)));
 }
 
-/** Calcula o IRT (0-100) para uma leitura meteorológica, dado um conjunto de pesos. */
+/**
+ * Pontuação de rajada (0-1) mapeada diretamente contra os limiares REAIS já validados
+ * no backtest e usados no gráfico de Linha do Tempo (20/35/46km/h) — ao invés de uma
+ * faixa linear arbitrária. Calibrado para que, com peso alto (ver DEFAULT_WEIGHTS),
+ * o IRT já cruze para a zona "Alto" quando a rajada atinge exatamente o limiar oficial
+ * de fechamento (46km/h) — garantindo que o medidor e o gráfico de rajadas concordem.
+ */
+function gustRiskScore(gustKmh: number): number {
+  if (gustKmh <= 20) return normalize(gustKmh, 0, 20) * 0.2; // 0 a 0.2 — "Operando"
+  if (gustKmh <= 35) return 0.2 + normalize(gustKmh, 20, 35) * 0.3; // 0.2 a 0.5 — "Alerta"
+  if (gustKmh <= 46) return 0.5 + normalize(gustKmh, 35, 46) * 0.45; // 0.5 a 0.95 — aproximando do crítico
+  return 0.95 + normalize(gustKmh, 46, 60) * 0.05; // 0.95 a 1.0 — "Risco de Interrupção"
+}
+
+/**
+ * Calcula o IRT (0-100). Estrutura: rajada é a BASE dominante (já numa escala 0-100
+ * alinhada aos limiares reais), com os outros fatores contribuindo como um ajuste
+ * menor por cima — e nevoeiro/alerta oficial como reforços somados diretamente, não
+ * diluídos numa média. Isso é deliberado: numa média ponderada comum, nenhum fator
+ * sozinho consegue ultrapassar o próprio peso, então mesmo uma rajada extrema (ex.
+ * 70km/h) não conseguia empurrar o índice para "muito alto" se os outros fatores
+ * estivessem calmos — foi exatamente o problema relatado por um usuário real (o
+ * medidor mostrava risco baixo com uma rajada crítica real acontecendo).
+ */
 export function computeRiskIndex(
   reading: WeatherReading,
   weights: AlgorithmWeights = DEFAULT_WEIGHTS,
   hasOfficialAlert = false
 ): number {
   const windScore = normalize(reading.windSpeedKmh, 10, 60);
-  const gustScore = normalize(reading.windGustKmh, 20, 80);
+  const gustScore = gustRiskScore(reading.windGustKmh); // 0-1, já alinhado aos limiares reais
   const waveScore = normalize(reading.waveHeightM, 0.5, 3);
   const periodScore = normalize(reading.wavePeriodS, 4, 12); // períodos mais longos = mar mais organizado, mas com swell maior
   const visibilityScore = 1 - normalize(reading.visibilityKm, 1, 15);
   const precipScore = normalize(reading.precipitationMm, 0, 20);
 
-  const weighted =
-    windScore * weights.windSpeed +
-    gustScore * weights.windGust +
-    waveScore * weights.waveHeight +
-    periodScore * weights.wavePeriod +
-    visibilityScore * weights.visibility +
-    precipScore * weights.precipitation +
-    (hasOfficialAlert ? weights.officialAlertBoost : 0) +
-    (reading.isFog ? weights.fogBoost : 0);
+  // Fatores secundários — contribuem um pouco, mas nunca dominam sozinhos.
+  const secondaryWeight = weights.windSpeed + weights.waveHeight + weights.wavePeriod + weights.visibility + weights.precipitation;
+  const secondaryScore =
+    secondaryWeight > 0
+      ? (windScore * weights.windSpeed +
+          waveScore * weights.waveHeight +
+          periodScore * weights.wavePeriod +
+          visibilityScore * weights.visibility +
+          precipScore * weights.precipitation) /
+        secondaryWeight
+      : 0;
 
-  const totalWeight =
-    weights.windSpeed +
-    weights.windGust +
-    weights.waveHeight +
-    weights.wavePeriod +
-    weights.visibility +
-    weights.precipitation +
-    weights.officialAlertBoost +
-    weights.fogBoost;
+  // Rajada domina a base (80%), fatores secundários ajustam por cima (20%).
+  const base = gustScore * 0.8 + secondaryScore * 0.2;
 
-  return Math.round(normalize(weighted, 0, totalWeight) * 100);
+  // Reforços somados diretamente por cima da base — cada um capaz de empurrar o
+  // índice sozinho, sem depender de outros fatores estarem elevados também.
+  const fogBoostPoints = reading.isFog ? weights.fogBoost * 150 : 0;
+  const officialAlertPoints = hasOfficialAlert ? weights.officialAlertBoost * 150 : 0;
+
+  const riskIndex = base * 100 + fogBoostPoints + officialAlertPoints;
+
+  return Math.round(Math.min(100, Math.max(0, riskIndex)));
 }
 
 /** Identifica quais variáveis mais empurraram o índice para cima, para a explicação do MPT. */
@@ -193,12 +223,17 @@ export function runMpt(
 
   let explanation = buildExplanation(factors, classifyRisk(riskIndex).label);
   if (incomingSystem) {
-    const systemLabel = incomingSystem.type === "chuva_forte" ? "chuva forte" : "vento forte / mar agitado";
     const confidenceNote =
       incomingSystem.confidence === "baixa"
         ? " (sinal de confiança baixa — indica região instável, não necessariamente um sistema se deslocando diretamente pra cá)"
         : "";
-    explanation += ` Atenção: ${systemLabel} detectado em ${incomingSystem.sourceLabel} (${incomingSystem.distanceKm}km), com vento indicando chegada em aproximadamente ${incomingSystem.etaHours}h${confidenceNote} — os horizontes de previsão acima já refletem isso.`;
+
+    if (incomingSystem.type === "aquecimento_pre_frontal") {
+      explanation += ` Atenção: aquecimento pré-frontal detectado no próprio canal — sinal de que uma frente fria pode se aproximar nas próximas horas, mesmo antes do vento intensificar${confidenceNote} — os horizontes de previsão acima já refletem isso.`;
+    } else {
+      const systemLabel = incomingSystem.type === "chuva_forte" ? "chuva forte" : "vento forte / mar agitado";
+      explanation += ` Atenção: ${systemLabel} detectado em ${incomingSystem.sourceLabel} (${incomingSystem.distanceKm}km), com vento indicando chegada em aproximadamente ${incomingSystem.etaHours}h${confidenceNote} — os horizontes de previsão acima já refletem isso.`;
+    }
   }
 
   return {

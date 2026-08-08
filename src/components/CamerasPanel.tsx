@@ -71,7 +71,7 @@ function CameraGroup({
   return (
     <div>
       <p className="mb-2 text-sm font-medium text-mist-100">{title}</p>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-4">
         {cameras.map((cam) => (
           <CameraTile key={cam.id} camera={cam} cacheBuster={cacheBuster} />
         ))}
